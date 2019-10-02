@@ -25,13 +25,27 @@
     "rlp": "^2.2.3",
     "solhint": "^2.2.0",
     "solidity-coverage": "^0.7.0-beta.2",
-    "truffle": "^5.0.37"
+    "truffle": "^5.0.37",
+    "truffle-security": "^1.6.0"
   },
   "scripts": {
     "test": "truffle test",
     "coverage": "truffle run coverage",
     "linter": "node_modules/eslint/bin/eslint.js . --fix",
-    "linter-sol": "node_modules/.bin/solhint --max-warnings 0 \"contracts/**/*.sol\""
+    "linter-sol": "node_modules/.bin/solhint --max-warnings 0 \"contracts/**/*.sol\"",
+    "mythx-quick": "npx truffle run verify  --mode quick --style json --no-progress $npm_package_config_PlasmaFramework $npm_package_config_Vaults $npm_package_config_DepositVerifiers $npm_package_config_PaymentExitGame $npm_package_config_PaymentExitGameLibs $npm_package_config_PaymentExitGameDeps $npm_package_config_PaymentOutputGuardHandler $npm_package_config_PaymentOutputToPaymentTxCondition > scripts/truffle-security-output.json",
+    "mythx-full": "npx truffle run verify  --mode full --style json --no-progress $npm_package_config_PlasmaFramework $npm_package_config_Vaults $npm_package_config_DepositVerifiers $npm_package_config_PaymentExitGame $npm_package_config_PaymentExitGameLibs $npm_package_config_PaymentExitGameDeps $npm_package_config_PaymentOutputGuardHandler $npm_package_config_PaymentOutputToPaymentTxCondition > scripts/truffle-security-output.json"
+  },
+  "config": {
+    "PlasmaFramework": "PlasmaFramework",
+    "Vaults": "EthVault Erc20Vault",
+    "DepositVerifiers": "EthDepositVerifier Erc20DepositVerifier",
+    "PaymentExitGame": "PaymentExitGame",
+    "PaymentExitGameLibs": "PaymentStartStandardExit PaymentChallengeStandardExit PaymentProcessStandardExit PaymentStartInFlightExit PaymentPiggybackInFlightExit PaymentChallengeIFENotCanonical PaymentChallengeIFEInputSpent PaymentChallengeIFEOutputSpent PaymentProcessInFlightExit",
+    "PaymentExitGameDeps": "OutputGuardHandlerRegistry SpendingConditionRegistry PaymentTransactionStateTransitionVerifier",
+    "PaymentOutputGuardHandler": "PaymentOutputGuardHandler",
+    "PaymentOutputToPaymentTxCondition": "PaymentOutputToPaymentTxCondition",
+    "Mocks": "RLPMock"
   },
   "repository": {
     "type": "git",
