@@ -1,4 +1,4 @@
-pragma solidity ^0.5.0;
+pragma solidity 0.5.11;
 pragma experimental ABIEncoderV2;
 
 import "../PaymentExitDataModel.sol";
@@ -7,14 +7,15 @@ import "../routers/PaymentInFlightExitRouterArgs.sol";
 import "../../interfaces/IOutputGuardHandler.sol";
 import "../../interfaces/ISpendingCondition.sol";
 import "../../interfaces/IStateTransitionVerifier.sol";
+import "../../interfaces/ITxFinalizationVerifier.sol";
 import "../../models/OutputGuardModel.sol";
+import "../../models/TxFinalizationModel.sol";
 import "../../registries/SpendingConditionRegistry.sol";
 import "../../registries/OutputGuardHandlerRegistry.sol";
 import "../../utils/ExitableTimestamp.sol";
 import "../../utils/ExitId.sol";
 import "../../utils/OutputGuard.sol";
 import "../../utils/OutputId.sol";
-import "../../utils/TxFinalization.sol";
 import "../../../utils/IsDeposit.sol";
 import "../../../utils/UtxoPosLib.sol";
 import "../../../utils/Merkle.sol";
@@ -29,10 +30,12 @@ library PaymentStartInFlightExit {
     using UtxoPosLib for UtxoPosLib.UtxoPos;
     using PaymentInFlightExitModelUtils for PaymentExitDataModel.InFlightExit;
     using PaymentOutputModel for PaymentOutputModel.Output;
-    using TxFinalization for TxFinalization.Verifier;
 
     uint256 constant public MAX_INPUT_NUM = 4;
 
+    /**
+     * @dev supportedTxType is there to enable reuse of code in different Payment Tx versions
+     */
     struct Controller {
         PlasmaFramework framework;
         IsDeposit.Predicate isDeposit;
@@ -40,6 +43,7 @@ library PaymentStartInFlightExit {
         OutputGuardHandlerRegistry outputGuardHandlerRegistry;
         SpendingConditionRegistry spendingConditionRegistry;
         IStateTransitionVerifier transitionVerifier;
+        ITxFinalizationVerifier txFinalizationVerifier;
         uint256 supportedTxType;
     }
 
@@ -67,7 +71,7 @@ library PaymentStartInFlightExit {
      */
     struct StartExitData {
         Controller controller;
-        uint192 exitId;
+        uint160 exitId;
         bytes inFlightTxRaw;
         PaymentTransactionModel.Transaction inFlightTx;
         bytes32 inFlightTxHash;
@@ -92,6 +96,7 @@ library PaymentStartInFlightExit {
         OutputGuardHandlerRegistry outputGuardHandlerRegistry,
         SpendingConditionRegistry spendingConditionRegistry,
         IStateTransitionVerifier transitionVerifier,
+        ITxFinalizationVerifier txFinalizationVerifier,
         uint256 supportedTxType
     )
         public
@@ -102,9 +107,10 @@ library PaymentStartInFlightExit {
             framework: framework,
             isDeposit: IsDeposit.Predicate(framework.CHILD_BLOCK_INTERVAL()),
             exitTimestampCalculator: ExitableTimestamp.Calculator(framework.minExitPeriod()),
+            outputGuardHandlerRegistry: outputGuardHandlerRegistry,
             spendingConditionRegistry: spendingConditionRegistry,
             transitionVerifier: transitionVerifier,
-            outputGuardHandlerRegistry: outputGuardHandlerRegistry,
+            txFinalizationVerifier: txFinalizationVerifier,
             supportedTxType: supportedTxType
         });
     }
@@ -198,7 +204,7 @@ library PaymentStartInFlightExit {
     }
 
     function verifyExitNotStarted(
-        uint192 exitId,
+        uint160 exitId,
         PaymentExitDataModel.InFlightExitMap storage inFlightExitMap
     )
         private
@@ -277,7 +283,7 @@ library PaymentStartInFlightExit {
 
             uint8 protocol = exitData.controller.framework.protocols(exitData.inputTxTypes[i]);
 
-            TxFinalization.Verifier memory verifier = TxFinalization.Verifier({
+            TxFinalizationModel.Data memory finalizationData = TxFinalizationModel.Data({
                 framework: exitData.controller.framework,
                 protocol: protocol,
                 txBytes: exitData.inputTxs[i],
@@ -286,7 +292,8 @@ library PaymentStartInFlightExit {
                 confirmSig: exitData.inputTxsConfirmSigs[i],
                 confirmSigAddress: outputGuardHandler.getConfirmSigAddress(outputGuardData)
             });
-            require(verifier.isStandardFinalized(), "Input transaction is not standard finalized");
+            require(exitData.controller.txFinalizationVerifier.isStandardFinalized(finalizationData),
+                    "Input transaction is not standard finalized");
         }
     }
 

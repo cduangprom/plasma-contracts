@@ -1,4 +1,4 @@
-pragma solidity ^0.5.0;
+pragma solidity 0.5.11;
 pragma experimental ABIEncoderV2;
 
 import "../PaymentExitDataModel.sol";
@@ -15,11 +15,11 @@ library PaymentProcessStandardExit {
     }
 
     event ExitOmitted(
-        uint192 indexed exitId
+        uint160 indexed exitId
     );
 
     event ExitFinalized(
-        uint192 indexed exitId
+        uint160 indexed exitId
     );
 
     /**
@@ -34,7 +34,7 @@ library PaymentProcessStandardExit {
     function run(
         Controller memory self,
         PaymentExitDataModel.StandardExitMap storage exitMap,
-        uint192 exitId,
+        uint160 exitId,
         address token
     )
         public

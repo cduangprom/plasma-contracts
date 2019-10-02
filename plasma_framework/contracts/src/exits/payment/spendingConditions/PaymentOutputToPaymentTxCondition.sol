@@ -1,4 +1,4 @@
-pragma solidity ^0.5.0;
+pragma solidity 0.5.11;
 
 import "openzeppelin-solidity/contracts/cryptography/ECDSA.sol";
 
@@ -18,6 +18,10 @@ contract PaymentOutputToPaymentTxCondition is ISpendingCondition {
     uint256 internal supportSpendingTxType;
     PaymentEip712Lib.Constants internal eip712;
 
+    /**
+     * @dev This is designed to be re-useable for all versions of Payment transaction.
+     *      As a result, inputTxType and spendingTxType of the Payment output is injected instead.
+     */
     constructor(address framework, uint256 inputTxType, uint256 spendingTxType) public {
         eip712 = PaymentEip712Lib.initConstants(framework);
         supportInputTxType = inputTxType;

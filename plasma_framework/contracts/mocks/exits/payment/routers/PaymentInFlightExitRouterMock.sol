@@ -1,4 +1,4 @@
-pragma solidity ^0.5.0;
+pragma solidity 0.5.11;
 pragma experimental ABIEncoderV2;
 
 import "../../../../src/exits/payment/PaymentExitDataModel.sol";
@@ -19,7 +19,8 @@ contract PaymentInFlightExitRouterMock is PaymentInFlightExitRouter {
         Erc20Vault erc20Vault,
         OutputGuardHandlerRegistry outputGuardHandlerRegistry,
         SpendingConditionRegistry spendingConditionRegistry,
-        IStateTransitionVerifier verifier,
+        IStateTransitionVerifier stateTransitionVerifier,
+        ITxFinalizationVerifier txFinalizationVerifier,
         uint256 supportedTxType
     )
         public
@@ -29,7 +30,8 @@ contract PaymentInFlightExitRouterMock is PaymentInFlightExitRouter {
             erc20Vault,
             outputGuardHandlerRegistry,
             spendingConditionRegistry,
-            verifier,
+            stateTransitionVerifier,
+            txFinalizationVerifier,
             supportedTxType
         )
     {
@@ -37,11 +39,11 @@ contract PaymentInFlightExitRouterMock is PaymentInFlightExitRouter {
     }
 
     /** override and calls processInFlightExit for test */
-    function processExit(uint192 exitId, address ercContract) external {
+    function processExit(uint160 exitId, address ercContract) external {
         PaymentInFlightExitRouter.processInFlightExit(exitId, ercContract);
     }
 
-    function setInFlightExit(uint192 exitId, PaymentExitDataModel.InFlightExit memory exit) public {
+    function setInFlightExit(uint160 exitId, PaymentExitDataModel.InFlightExit memory exit) public {
         PaymentExitDataModel.InFlightExit storage ife = inFlightExitMap.exits[exitId];
         ife.isCanonical = exit.isCanonical;
         ife.exitStartTimestamp = exit.exitStartTimestamp;
@@ -60,15 +62,15 @@ contract PaymentInFlightExitRouterMock is PaymentInFlightExitRouter {
         }
     }
 
-    function getInFlightExitInput(uint192 exitId, uint16 inputIndex) public view returns (PaymentExitDataModel.WithdrawData memory) {
+    function getInFlightExitInput(uint160 exitId, uint16 inputIndex) public view returns (PaymentExitDataModel.WithdrawData memory) {
         return inFlightExitMap.exits[exitId].inputs[inputIndex];
     }
 
-    function setInFlightExitInputPiggybacked(uint192 exitId, uint16 inputIndex) public payable {
+    function setInFlightExitInputPiggybacked(uint160 exitId, uint16 inputIndex) public payable {
         inFlightExitMap.exits[exitId].setInputPiggybacked(inputIndex);
     }
 
-    function getInFlightExitOutput(uint192 exitId, uint16 outputIndex) public view returns (PaymentExitDataModel.WithdrawData memory) {
+    function getInFlightExitOutput(uint160 exitId, uint16 outputIndex) public view returns (PaymentExitDataModel.WithdrawData memory) {
         return inFlightExitMap.exits[exitId].outputs[outputIndex];
     }
 

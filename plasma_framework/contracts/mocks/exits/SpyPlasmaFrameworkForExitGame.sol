@@ -1,4 +1,4 @@
-pragma solidity ^0.5.0;
+pragma solidity 0.5.11;
 pragma experimental ABIEncoderV2;
 
 import "../../src/framework/PlasmaFramework.sol";
@@ -24,7 +24,7 @@ contract SpyPlasmaFrameworkForExitGame is PlasmaFramework {
     }
 
     /** override for test */
-    function enqueue(address _token, uint64 _exitableAt, TxPosLib.TxPos calldata _txPos, uint192 _exitId, IExitProcessor _exitProcessor)
+    function enqueue(address _token, uint64 _exitableAt, TxPosLib.TxPos calldata _txPos, uint160 _exitId, IExitProcessor _exitProcessor)
         external
         returns (uint256)
     {

@@ -1,4 +1,4 @@
-pragma solidity ^0.5.0;
+pragma solidity 0.5.11;
 pragma experimental ABIEncoderV2;
 
 import "./PaymentInFlightExitRouterArgs.sol";
@@ -12,6 +12,7 @@ import "../controllers/PaymentChallengeIFEOutputSpent.sol";
 import "../../registries/SpendingConditionRegistry.sol";
 import "../../registries/OutputGuardHandlerRegistry.sol";
 import "../../interfaces/IStateTransitionVerifier.sol";
+import "../../interfaces/ITxFinalizationVerifier.sol";
 import "../../utils/BondSize.sol";
 import "../../../utils/OnlyWithValue.sol";
 import "../../../framework/PlasmaFramework.sol";
@@ -33,6 +34,7 @@ contract PaymentInFlightExitRouter is IExitProcessor, Operated, OnlyWithValue {
     // Initial piggyback bond size = 140000 (gas cost of challenge) * 20 gwei (current fast gas price) * 10 (safety margin)
     uint128 public constant INITIAL_PB_BOND_SIZE = 28000000000000000 wei;
 
+    // each bond size upgrade can either at most increase to 200% or decrease to 50% of current bond
     uint16 public constant BOND_LOWER_BOUND_DIVISOR = 2;
     uint16 public constant BOND_UPPER_BOUND_MULTIPLIER = 2;
 
@@ -55,7 +57,8 @@ contract PaymentInFlightExitRouter is IExitProcessor, Operated, OnlyWithValue {
         Erc20Vault erc20Vault,
         OutputGuardHandlerRegistry outputGuardHandlerRegistry,
         SpendingConditionRegistry spendingConditionRegistry,
-        IStateTransitionVerifier verifier,
+        IStateTransitionVerifier stateTransitionVerifier,
+        ITxFinalizationVerifier txFinalizationVerifier,
         uint256 supportedTxType
     )
         public
@@ -64,7 +67,8 @@ contract PaymentInFlightExitRouter is IExitProcessor, Operated, OnlyWithValue {
             framework,
             outputGuardHandlerRegistry,
             spendingConditionRegistry,
-            verifier,
+            stateTransitionVerifier,
+            txFinalizationVerifier,
             supportedTxType
         );
 
@@ -78,19 +82,22 @@ contract PaymentInFlightExitRouter is IExitProcessor, Operated, OnlyWithValue {
             framework,
             spendingConditionRegistry,
             outputGuardHandlerRegistry,
+            txFinalizationVerifier,
             supportedTxType
         );
-        
+
         challengeInputSpentController = PaymentChallengeIFEInputSpent.buildController(
             framework,
             spendingConditionRegistry,
-            outputGuardHandlerRegistry
+            outputGuardHandlerRegistry,
+            txFinalizationVerifier
         );
 
         challengeOutputSpentController = PaymentChallengeIFEOutputSpent.Controller(
             framework,
             spendingConditionRegistry,
-            outputGuardHandlerRegistry
+            outputGuardHandlerRegistry,
+            txFinalizationVerifier
         );
 
         processInflightExitController = PaymentProcessInFlightExit.Controller({
@@ -102,8 +109,12 @@ contract PaymentInFlightExitRouter is IExitProcessor, Operated, OnlyWithValue {
         piggybackBond = BondSize.buildParams(INITIAL_PB_BOND_SIZE, BOND_LOWER_BOUND_DIVISOR, BOND_UPPER_BOUND_MULTIPLIER);
     }
 
-    function inFlightExits(uint192 _exitId) public view returns (PaymentExitDataModel.InFlightExit memory) {
-        return inFlightExitMap.exits[_exitId];
+    /**
+     * @notice Getter functions to retrieve in-flight exit data of the PaymentExitGame.
+     * @param exitId the exit id of the in-flight exit
+     */
+    function inFlightExits(uint160 exitId) public view returns (PaymentExitDataModel.InFlightExit memory) {
+        return inFlightExitMap.exits[exitId];
     }
 
     /**
@@ -156,6 +167,12 @@ contract PaymentInFlightExitRouter is IExitProcessor, Operated, OnlyWithValue {
         challengeCanonicityController.challenge(inFlightExitMap, args);
     }
 
+    /**
+     * @notice Respond to a non canonical challenge by providing position and proving the correctness of it.
+     * @param inFlightTx the rlp encoded in-flight transaction.
+     * @param inFlightTxPos the UTXO position of the in-flight exit. The outputIndex should be set to 0.
+     * @param inFlightTxInclusionProof inclusion proof for the in-flight tx.
+     */
     function respondToNonCanonicalChallenge(
         bytes memory inFlightTx,
         uint256 inFlightTxPos,
@@ -166,6 +183,10 @@ contract PaymentInFlightExitRouter is IExitProcessor, Operated, OnlyWithValue {
         challengeCanonicityController.respond(inFlightExitMap, inFlightTx, inFlightTxPos, inFlightTxInclusionProof);
     }
 
+    /**
+     * @notice Challenges an exit from in-flight transaction input.
+     * @param args argument data to challenge. See struct 'ChallengeInputSpentArgs' for detailed info.
+     */
     function challengeInFlightExitInputSpent(PaymentInFlightExitRouterArgs.ChallengeInputSpentArgs memory args)
         public
     {
@@ -188,7 +209,7 @@ contract PaymentInFlightExitRouter is IExitProcessor, Operated, OnlyWithValue {
      * @param exitId The in-flight exit id.
      * @param token The token (in erc20 address or address(0) for ETH) of the exiting output.
      */
-    function processInFlightExit(uint192 exitId, address token) internal {
+    function processInFlightExit(uint160 exitId, address token) internal {
         processInflightExitController.run(inFlightExitMap, exitId, token);
     }
 

@@ -1,4 +1,4 @@
-pragma solidity ^0.5.0;
+pragma solidity 0.5.11;
 
 library PaymentStandardExitRouterArgs {
     /**
@@ -32,7 +32,7 @@ library PaymentStandardExitRouterArgs {
      * @param challengeTxConfirmSig (Optional) if the challenge tx is of MVP protocol provide the confirm sig of it
      */
     struct ChallengeStandardExitArgs {
-        uint192 exitId;
+        uint160 exitId;
         uint256 outputType;
         bytes exitingTx;
         bytes challengeTx;

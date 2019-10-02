@@ -1,4 +1,4 @@
-pragma solidity ^0.5.0;
+pragma solidity 0.5.11;
 pragma experimental ABIEncoderV2;
 
 import "./PaymentStandardExitRouterArgs.sol";
@@ -6,6 +6,7 @@ import "../PaymentExitDataModel.sol";
 import "../controllers/PaymentStartStandardExit.sol";
 import "../controllers/PaymentProcessStandardExit.sol";
 import "../controllers/PaymentChallengeStandardExit.sol";
+import "../../interfaces/ITxFinalizationVerifier.sol";
 import "../../registries/SpendingConditionRegistry.sol";
 import "../../registries/OutputGuardHandlerRegistry.sol";
 import "../../utils/BondSize.sol";
@@ -28,6 +29,8 @@ contract PaymentStandardExitRouter is
 
     // Initial bond size = 70000 (gas cost of challenge) * 20 gwei (current fast gas price) * 10 (safety margin)
     uint128 public constant INITIAL_BOND_SIZE = 14000000000000000 wei;
+
+    // each bond size upgrade can either at most increase to 200% or decrease to 50% of current bond
     uint16 public constant BOND_LOWER_BOUND_DIVISOR = 2;
     uint16 public constant BOND_UPPER_BOUND_MULTIPLIER = 2;
 
@@ -44,16 +47,17 @@ contract PaymentStandardExitRouter is
         EthVault ethVault,
         Erc20Vault erc20Vault,
         OutputGuardHandlerRegistry outputGuardHandlerRegistry,
-        SpendingConditionRegistry spendingConditionRegistry
+        SpendingConditionRegistry spendingConditionRegistry,
+        ITxFinalizationVerifier txFinalizationVerifier
     )
         public
     {
         startStandardExitController = PaymentStartStandardExit.buildController(
-            this, framework, outputGuardHandlerRegistry
+            this, framework, outputGuardHandlerRegistry, txFinalizationVerifier
         );
 
         challengeStandardExitController = PaymentChallengeStandardExit.buildController(
-            framework, spendingConditionRegistry, outputGuardHandlerRegistry
+            framework, spendingConditionRegistry, outputGuardHandlerRegistry, txFinalizationVerifier
         );
 
         processStandardExitController = PaymentProcessStandardExit.Controller(
@@ -63,8 +67,12 @@ contract PaymentStandardExitRouter is
         startStandardExitBond = BondSize.buildParams(INITIAL_BOND_SIZE, BOND_LOWER_BOUND_DIVISOR, BOND_UPPER_BOUND_MULTIPLIER);
     }
 
-    function standardExits(uint192 _exitId) public view returns (PaymentExitDataModel.StandardExit memory) {
-        return standardExitMap.exits[_exitId];
+    /**
+     * @notice Getter functions to retrieve standard exit data of the PaymentExitGame.
+     * @param exitId the exit id of such standard exit.
+     */
+    function standardExits(uint160 exitId) public view returns (PaymentExitDataModel.StandardExit memory) {
+        return standardExitMap.exits[exitId];
     }
 
     /**
@@ -112,7 +120,7 @@ contract PaymentStandardExitRouter is
      * @param exitId The standard exit id.
      * @param token The token (in erc20 address or address(0) for ETH) of the exiting output.
      */
-    function processStandardExit(uint192 exitId, address token) internal {
+    function processStandardExit(uint160 exitId, address token) internal {
         processStandardExitController.run(standardExitMap, exitId, token);
     }
 }

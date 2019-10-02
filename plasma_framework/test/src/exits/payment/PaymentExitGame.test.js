@@ -23,6 +23,7 @@ const PaymentProcessInFlightExit = artifacts.require('PaymentProcessInFlightExit
 const PlasmaFramework = artifacts.require('PlasmaFramework');
 const PriorityQueue = artifacts.require('PriorityQueue');
 const SpendingConditionRegistry = artifacts.require('SpendingConditionRegistry');
+const TxFinalizationVerifier = artifacts.require('TxFinalizationVerifier');
 
 const {
     BN, constants, expectEvent, expectRevert, time,
@@ -40,8 +41,7 @@ const { hashTx } = require('../../../helpers/paymentEip712.js');
 const { buildUtxoPos, utxoPosToTxPos } = require('../../../helpers/positions.js');
 const Testlang = require('../../../helpers/testlang.js');
 
-// Skipped for now due to https://github.com/omisego/plasma-contracts/issues/287
-contract.skip('PaymentExitGame - End to End Tests', ([_, richFather, bob]) => {
+contract('PaymentExitGame - End to End Tests', ([_, richFather, bob]) => {
     const MIN_EXIT_PERIOD = 60 * 60 * 24 * 7; // 1 week
     const ETH = constants.ZERO_ADDRESS;
     const INITIAL_ERC20_SUPPLY = 10000000000;
@@ -84,7 +84,7 @@ contract.skip('PaymentExitGame - End to End Tests', ([_, richFather, bob]) => {
 
     const deployStableContracts = async () => {
         this.exitIdHelper = await ExitId.new();
-        this.exirPriorityHelper = await ExitPriority.new();
+        this.exitPriorityHelper = await ExitPriority.new();
 
         this.erc20 = await ERC20Mintable.new();
         await this.erc20.mint(richFather, INITIAL_ERC20_SUPPLY);
@@ -118,6 +118,8 @@ contract.skip('PaymentExitGame - End to End Tests', ([_, richFather, bob]) => {
 
         const spendingConditionRegistry = await SpendingConditionRegistry.new();
         const stateVerifier = await PaymentTransactionStateTransitionVerifier.new();
+        const txFinalizationVerifier = await TxFinalizationVerifier.new();
+
         this.exitGame = await PaymentExitGame.new(
             this.framework.address,
             this.ethVault.address,
@@ -125,13 +127,14 @@ contract.skip('PaymentExitGame - End to End Tests', ([_, richFather, bob]) => {
             outputGuardHandlerRegistry.address,
             spendingConditionRegistry.address,
             stateVerifier.address,
+            txFinalizationVerifier.address,
             TX_TYPE.PAYMENT,
         );
 
         this.startStandardExitBondSize = await this.exitGame.startStandardExitBondSize();
 
         this.toPaymentCondition = await PaymentOutputToPaymentTxCondition.new(
-            this.framework.address, TX_TYPE.PAYMENT, TX_TYPE.PAYMENT,
+            this.framework.address, OUTPUT_TYPE.PAYMENT, TX_TYPE.PAYMENT,
         );
         await spendingConditionRegistry.registerSpendingCondition(
             OUTPUT_TYPE.PAYMENT, TX_TYPE.PAYMENT, this.toPaymentCondition.address,
@@ -247,9 +250,12 @@ contract.skip('PaymentExitGame - End to End Tests', ([_, richFather, bob]) => {
                     const exitableAt = await this.exitableHelper.calculate(
                         currentTimestamp, timestamp, isTxDeposit,
                     );
-                    const exitQueueNonceUsed = (await this.framework.exitQueueNonce()).sub(new BN(1));
-                    const priorityExpected = await this.exirPriorityHelper.computePriority(
-                        exitableAt, utxoPosToTxPos(this.depositUtxoPos), exitQueueNonceUsed,
+
+                    const exitIdExpected = await this.exitIdHelper.getStandardExitId(
+                        true, this.depositTx, this.depositUtxoPos,
+                    );
+                    const priorityExpected = await this.exitPriorityHelper.computePriority(
+                        exitableAt, utxoPosToTxPos(this.depositUtxoPos), exitIdExpected,
                     );
 
                     expect(uniquePriority).to.be.bignumber.equal(priorityExpected);

@@ -1,4 +1,4 @@
-pragma solidity ^0.5.0;
+pragma solidity 0.5.11;
 
 /**
  * @notice Stores an updateable bond size.
@@ -72,6 +72,6 @@ library BondSize {
     function validateBondSize(Params memory _self, uint128 newBondSize) private view {
         uint128 currentBondSize = bondSize(_self);
         require(newBondSize >= currentBondSize / _self.lowerBoundDivisor, "Bond size is too low");
-        require(newBondSize <= currentBondSize * _self.upperBoundMultiplier, "Bond size is too high");
+        require(uint256(newBondSize) <= uint256(currentBondSize) * _self.upperBoundMultiplier, "Bond size is too high");
     }
 }

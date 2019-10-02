@@ -1,4 +1,4 @@
-pragma solidity ^0.5.0;
+pragma solidity 0.5.11;
 pragma experimental ABIEncoderV2;
 
 import "../PaymentExitDataModel.sol";
@@ -6,12 +6,13 @@ import "../PaymentInFlightExitModelUtils.sol";
 import "../routers/PaymentInFlightExitRouterArgs.sol";
 import "../../interfaces/IOutputGuardHandler.sol";
 import "../../interfaces/ISpendingCondition.sol";
+import "../../interfaces/ITxFinalizationVerifier.sol";
 import "../../models/OutputGuardModel.sol";
+import "../../models/TxFinalizationModel.sol";
 import "../../registries/SpendingConditionRegistry.sol";
 import "../../registries/OutputGuardHandlerRegistry.sol";
 import "../../utils/ExitId.sol";
 import "../../utils/OutputId.sol";
-import "../../utils/TxFinalization.sol";
 import "../../../utils/UtxoPosLib.sol";
 import "../../../utils/IsDeposit.sol";
 import "../../../utils/Merkle.sol";
@@ -29,6 +30,7 @@ library PaymentChallengeIFEInputSpent {
         IsDeposit.Predicate isDeposit;
         SpendingConditionRegistry spendingConditionRegistry;
         OutputGuardHandlerRegistry outputGuardHandlerRegistry;
+        ITxFinalizationVerifier txFinalizationVerifier;
     }
 
     event InFlightExitInputBlocked(
@@ -46,10 +48,15 @@ library PaymentChallengeIFEInputSpent {
         PaymentExitDataModel.InFlightExit ife;
     }
 
+    /**
+     * @notice Function that builds the controller struct
+     * @return Controller struct of PaymentChallengeIFEInputSpent
+     */
     function buildController(
         PlasmaFramework framework,
         SpendingConditionRegistry spendingConditionRegistry,
-        OutputGuardHandlerRegistry outputGuardHandlerRegistry
+        OutputGuardHandlerRegistry outputGuardHandlerRegistry,
+        ITxFinalizationVerifier txFinalizationVerifier
     )
         public
         view
@@ -59,10 +66,18 @@ library PaymentChallengeIFEInputSpent {
             framework: framework,
             isDeposit: IsDeposit.Predicate(framework.CHILD_BLOCK_INTERVAL()),
             spendingConditionRegistry: spendingConditionRegistry,
-            outputGuardHandlerRegistry: outputGuardHandlerRegistry
+            outputGuardHandlerRegistry: outputGuardHandlerRegistry,
+            txFinalizationVerifier: txFinalizationVerifier
         });
     }
 
+    /**
+     * @notice Main logic implementation for 'challengeInFlightExitInputSpent'
+     * @dev emits InFlightExitInputBlocked event on success
+     * @param self the controller struct
+     * @param inFlightExitMap the storage of all in-flight exit data
+     * @param args arguments of 'challengeInFlightExitInputSpent' function from client.
+     */
     function run(
         Controller memory self,
         PaymentExitDataModel.InFlightExitMap storage inFlightExitMap,
@@ -70,7 +85,7 @@ library PaymentChallengeIFEInputSpent {
     )
         public
     {
-        uint192 exitId = ExitId.getInFlightExitId(args.inFlightTx);
+        uint160 exitId = ExitId.getInFlightExitId(args.inFlightTx);
         PaymentExitDataModel.InFlightExit storage ife = inFlightExitMap.exits[exitId];
 
         require(ife.exitStartTimestamp != 0, "In-flight exit doesn't exist");
@@ -134,14 +149,14 @@ library PaymentChallengeIFEInputSpent {
         private
         view
     {
-        TxFinalization.Verifier memory finalizationVerifier = TxFinalization.moreVpVerifier(
+        TxFinalizationModel.Data memory finalizationData = TxFinalizationModel.moreVpData(
             data.controller.framework,
             data.args.challengingTx,
             TxPosLib.TxPos(0),
             bytes("")
         );
 
-        require(TxFinalization.isProtocolFinalized(finalizationVerifier), "Challenging transaction not finalized");
+        require(data.controller.txFinalizationVerifier.isProtocolFinalized(finalizationData), "Challenging transaction not finalized");
     }
 
     function verifySpendingCondition(ChallengeIFEData memory data) private view {

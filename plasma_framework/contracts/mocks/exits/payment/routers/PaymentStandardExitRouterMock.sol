@@ -1,4 +1,4 @@
-pragma solidity ^0.5.0;
+pragma solidity 0.5.11;
 pragma experimental ABIEncoderV2;
 
 import "../../../../src/exits/payment/routers/PaymentStandardExitRouter.sol";
@@ -10,31 +10,33 @@ contract PaymentStandardExitRouterMock is PaymentStandardExitRouter {
     PlasmaFramework private framework;
 
     constructor(
-        PlasmaFramework _framework,
-        EthVault _ethVault,
-        Erc20Vault _erc20Vault,
-        OutputGuardHandlerRegistry _outputGuardHandlerRegistry,
-        SpendingConditionRegistry _spendingConditionRegistry
+        PlasmaFramework plasmaFramework,
+        EthVault ethVault,
+        Erc20Vault erc20Vault,
+        OutputGuardHandlerRegistry outputGuardHandlerRegistry,
+        SpendingConditionRegistry spendingConditionRegistry,
+        ITxFinalizationVerifier txFinalizationVerifier
     )
         public
         PaymentStandardExitRouter(
-            _framework,
-            _ethVault,
-            _erc20Vault,
-            _outputGuardHandlerRegistry,
-            _spendingConditionRegistry
+            plasmaFramework,
+            ethVault,
+            erc20Vault,
+            outputGuardHandlerRegistry,
+            spendingConditionRegistry,
+            txFinalizationVerifier
         )
     {
-        framework = _framework;
+        framework = plasmaFramework;
     }
 
     /** override and calls processStandardExit for test */
-    function processExit(uint192 exitId, address ercContract) external {
+    function processExit(uint160 exitId, address ercContract) external {
         PaymentStandardExitRouter.processStandardExit(exitId, ercContract);
     }
 
     /** helper functions for testing */
-    function setExit(uint192 _exitId, PaymentExitDataModel.StandardExit memory _exitData) public {
+    function setExit(uint160 _exitId, PaymentExitDataModel.StandardExit memory _exitData) public {
         PaymentStandardExitRouter.standardExitMap.exits[_exitId] = _exitData;
     }
 

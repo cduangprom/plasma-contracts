@@ -1,16 +1,20 @@
-pragma solidity ^0.5.0;
+pragma solidity 0.5.11;
 pragma experimental ABIEncoderV2;
 
 import "./routers/PaymentStandardExitRouter.sol";
 import "./routers/PaymentInFlightExitRouter.sol";
+import "../interfaces/IStateTransitionVerifier.sol";
+import "../interfaces/ITxFinalizationVerifier.sol";
 import "../utils/ExitId.sol";
 import "../../framework/interfaces/IExitProcessor.sol";
 import "../../framework/PlasmaFramework.sol";
 import "../../vaults/EthVault.sol";
 import "../../vaults/Erc20Vault.sol";
-import "../interfaces/IStateTransitionVerifier.sol";
 import "../../utils/OnlyFromAddress.sol";
 
+/**
+ * @notice The exit game contract implementation for Payment Transaction
+ */
 contract PaymentExitGame is IExitProcessor, PaymentStandardExitRouter, PaymentInFlightExitRouter, OnlyFromAddress {
 
     PlasmaFramework private plasmaFramework;
@@ -22,6 +26,7 @@ contract PaymentExitGame is IExitProcessor, PaymentStandardExitRouter, PaymentIn
         OutputGuardHandlerRegistry outputGuardHandlerRegistry,
         SpendingConditionRegistry spendingConditionRegistry,
         IStateTransitionVerifier stateTransitionVerifier,
+        ITxFinalizationVerifier txFinalizationVerifier,
         uint256 supportTxType
     )
         public
@@ -30,7 +35,8 @@ contract PaymentExitGame is IExitProcessor, PaymentStandardExitRouter, PaymentIn
             ethVault,
             erc20Vault,
             outputGuardHandlerRegistry,
-            spendingConditionRegistry
+            spendingConditionRegistry,
+            txFinalizationVerifier
         )
         PaymentInFlightExitRouter(
             framework,
@@ -39,6 +45,7 @@ contract PaymentExitGame is IExitProcessor, PaymentStandardExitRouter, PaymentIn
             outputGuardHandlerRegistry,
             spendingConditionRegistry,
             stateTransitionVerifier,
+            txFinalizationVerifier,
             supportTxType
         )
     {
@@ -47,11 +54,10 @@ contract PaymentExitGame is IExitProcessor, PaymentStandardExitRouter, PaymentIn
 
     /**
      * @notice Callback processes exit function for the PlasmaFramework to call.
-     * @dev in ERC20, each address of the ERC contract would represent the token directly.
      * @param exitId The exit id.
-     * @param token The token (in ERC20 address or address(0) for ETH) of the exiting output.
+     * @param token The token (ERC20 address or address(0) for ETH) of the exiting output.
      */
-    function processExit(uint192 exitId, address token) external onlyFrom(address(plasmaFramework)) {
+    function processExit(uint160 exitId, address token) external onlyFrom(address(plasmaFramework)) {
         if (ExitId.isStandardExit(exitId)) {
             PaymentStandardExitRouter.processStandardExit(exitId, token);
         } else {
@@ -59,6 +65,9 @@ contract PaymentExitGame is IExitProcessor, PaymentStandardExitRouter, PaymentIn
         }
     }
 
+    /**
+     * @notice Helper function to compute standard exit id.
+     */
     function getStandardExitId(bool _isDeposit, bytes memory _txBytes, uint256 _utxoPos)
         public
         pure
@@ -68,6 +77,9 @@ contract PaymentExitGame is IExitProcessor, PaymentStandardExitRouter, PaymentIn
         return ExitId.getStandardExitId(_isDeposit, _txBytes, utxoPos);
     }
 
+    /**
+     * @notice Helper function to compute in-flight exit id.
+     */
     function getInFlightExitId(bytes memory _txBytes)
         public
         pure
