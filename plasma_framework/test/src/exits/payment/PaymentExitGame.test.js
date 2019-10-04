@@ -41,7 +41,7 @@ const { hashTx } = require('../../../helpers/paymentEip712.js');
 const { buildUtxoPos, utxoPosToTxPos } = require('../../../helpers/positions.js');
 const Testlang = require('../../../helpers/testlang.js');
 
-contract('PaymentExitGame - End to End Tests', ([_, richFather, bob]) => {
+contract('PaymentExitGame - End to End Tests', ([_, richFather, bob, maintainer, authority]) => {
     const MIN_EXIT_PERIOD = 60 * 60 * 24 * 7; // 1 week
     const ETH = constants.ZERO_ADDRESS;
     const INITIAL_ERC20_SUPPLY = 10000000000;
@@ -96,19 +96,24 @@ contract('PaymentExitGame - End to End Tests', ([_, richFather, bob]) => {
     });
 
     const setupContracts = async () => {
-        this.framework = await PlasmaFramework.new(MIN_EXIT_PERIOD, INITIAL_IMMUNE_VAULTS, INITIAL_IMMUNE_EXIT_GAMES);
-        await this.framework.initAuthority();
+        this.framework = await PlasmaFramework.new(
+            MIN_EXIT_PERIOD,
+            INITIAL_IMMUNE_VAULTS,
+            INITIAL_IMMUNE_EXIT_GAMES,
+            authority,
+            maintainer,
+        );
 
         const ethDepositVerifier = await EthDepositVerifier.new();
         this.ethVault = await EthVault.new(this.framework.address);
-        await this.ethVault.setDepositVerifier(ethDepositVerifier.address);
+        await this.ethVault.setDepositVerifier(ethDepositVerifier.address, { from: maintainer });
 
         const erc20DepositVerifier = await Erc20DepositVerifier.new();
         this.erc20Vault = await Erc20Vault.new(this.framework.address);
-        await this.erc20Vault.setDepositVerifier(erc20DepositVerifier.address);
+        await this.erc20Vault.setDepositVerifier(erc20DepositVerifier.address, { from: maintainer });
 
-        await this.framework.registerVault(1, this.ethVault.address);
-        await this.framework.registerVault(2, this.erc20Vault.address);
+        await this.framework.registerVault(1, this.ethVault.address, { from: maintainer });
+        await this.framework.registerVault(2, this.erc20Vault.address, { from: maintainer });
 
         const outputGuardHandlerRegistry = await OutputGuardHandlerRegistry.new();
         const paymentOutputGuardHandler = await PaymentOutputGuardHandler.new();
@@ -139,7 +144,12 @@ contract('PaymentExitGame - End to End Tests', ([_, richFather, bob]) => {
         await spendingConditionRegistry.registerSpendingCondition(
             OUTPUT_TYPE.PAYMENT, TX_TYPE.PAYMENT, this.toPaymentCondition.address,
         );
-        await this.framework.registerExitGame(TX_TYPE.PAYMENT, this.exitGame.address, PROTOCOL.MORE_VP);
+        await this.framework.registerExitGame(
+            TX_TYPE.PAYMENT,
+            this.exitGame.address,
+            PROTOCOL.MORE_VP,
+            { from: maintainer },
+        );
     };
 
     const aliceDepositsETH = async () => {
@@ -166,7 +176,7 @@ contract('PaymentExitGame - End to End Tests', ([_, richFather, bob]) => {
         this.merkleTreeForTransferTx = new MerkleTree([this.transferTx]);
         this.merkleProofForTransferTx = this.merkleTreeForTransferTx.getInclusionProof(this.transferTx);
 
-        await this.framework.submitBlock(this.merkleTreeForTransferTx.root);
+        await this.framework.submitBlock(this.merkleTreeForTransferTx.root, { from: authority });
     };
 
     const aliceDepositsErc20 = async () => {
