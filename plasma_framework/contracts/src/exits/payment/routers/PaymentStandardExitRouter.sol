@@ -14,12 +14,12 @@ import "../../../vaults/EthVault.sol";
 import "../../../vaults/Erc20Vault.sol";
 import "../../../framework/PlasmaFramework.sol";
 import "../../../framework/interfaces/IExitProcessor.sol";
-import "../../../framework/utils/Operated.sol";
 import "../../../utils/OnlyWithValue.sol";
+import "../../../utils/OnlyFromAddress.sol";
 
 contract PaymentStandardExitRouter is
     IExitProcessor,
-    Operated,
+    OnlyFromAddress,
     OnlyWithValue
 {
     using PaymentStartStandardExit for PaymentStartStandardExit.Controller;
@@ -40,6 +40,8 @@ contract PaymentStandardExitRouter is
     PaymentChallengeStandardExit.Controller internal challengeStandardExitController;
     BondSize.Params internal startStandardExitBond;
 
+    address private maintainer;
+
     event StandardExitBondUpdated(uint128 bondSize);
 
     constructor(
@@ -52,6 +54,8 @@ contract PaymentStandardExitRouter is
     )
         public
     {
+        maintainer = framework.maintainer();
+
         startStandardExitController = PaymentStartStandardExit.buildController(
             this, framework, outputGuardHandlerRegistry, txFinalizationVerifier
         );
@@ -86,7 +90,7 @@ contract PaymentStandardExitRouter is
      * @notice Updates the standard exit bond size. Will take 2 days to come into effect.
      * @param newBondSize The new bond size.
      */
-    function updateStartStandardExitBondSize(uint128 newBondSize) public onlyOperator {
+    function updateStartStandardExitBondSize(uint128 newBondSize) public onlyFrom(maintainer) {
         startStandardExitBond.updateBondSize(newBondSize);
         emit StandardExitBondUpdated(newBondSize);
     }
