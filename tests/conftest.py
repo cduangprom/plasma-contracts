@@ -130,7 +130,8 @@ def get_contract(w3, accounts):
 
 @pytest.fixture
 def plasma_framework(get_contract, accounts):
-    return PlasmaFramework(get_contract, maintainer=accounts[-1])
+    # use the default web3 account for authority
+    return PlasmaFramework(get_contract, maintainer=accounts[-1], authority=accounts[0])
 
 
 def initialized_contract(get_contract, exit_period, immune_vaults, immune_exit_games):
