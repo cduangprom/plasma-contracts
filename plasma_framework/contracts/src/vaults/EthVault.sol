@@ -4,8 +4,17 @@ import "./Vault.sol";
 import "./verifiers/IEthDepositVerifier.sol";
 import "../framework/PlasmaFramework.sol";
 
-contract EthVault is Vault {
+import "openzeppelin-solidity/contracts/utils/ReentrancyGuard.sol";
+
+contract EthVault is Vault, ReentrancyGuard {
+    uint256 private withdrawEntryCounter = 0;
+
     event EthWithdrawn(
+        address payable indexed receiver,
+        uint256 amount
+    );
+
+    event WithdrawFailed(
         address payable indexed receiver,
         uint256 amount
     );
@@ -36,8 +45,14 @@ contract EthVault is Vault {
     * @param receiver address of the transferee
     * @param amount amount of eth to transfer.
     */
-    function withdraw(address payable receiver, uint256 amount) external onlyFromNonQuarantinedExitGame {
-        receiver.transfer(amount);
-        emit EthWithdrawn(receiver, amount);
+    function withdraw(address payable receiver, uint256 amount) external onlyFromNonQuarantinedExitGame nonReentrant {
+        // we do not want to block a queue if transfer is unucessfull
+        // solhint-disable-next-line avoid-call-value
+        (bool success, ) = receiver.call.value(amount)("");
+        if (success) {
+            emit EthWithdrawn(receiver, amount);
+        } else {
+            emit WithdrawFailed(receiver, amount);
+        }
     }
 }

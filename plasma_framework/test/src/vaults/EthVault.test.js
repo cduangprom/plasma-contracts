@@ -2,6 +2,7 @@ const PlasmaFramework = artifacts.require('PlasmaFramework');
 const EthVault = artifacts.require('EthVault');
 const EthDepositVerifier = artifacts.require('EthDepositVerifier');
 const DummyExitGame = artifacts.require('DummyExitGame');
+const ReentrancyAttacker = artifacts.require('EthWithdrawAttacker');
 
 const {
     BN, constants, expectEvent, expectRevert, time,
@@ -193,6 +194,47 @@ contract('EthVault', ([_, alice]) => {
                     amount: new BN(DEPOSIT_VALUE),
                 },
             );
+        });
+
+        it('should be protected against reentrancy attack', async () => {
+            this.preBalance = new BN(await web3.eth.getBalance(this.ethVault.address));
+            this.attacker = await ReentrancyAttacker.new(this.ethVault.address, 1);
+            await this.framework.registerExitGame(2, this.attacker.address, PROTOCOL.MORE_VP);
+
+            await time.increase(3 * MIN_EXIT_PERIOD + 1);
+
+            await web3.eth.sendTransaction({ to: this.attacker.address, from: alice, value: web3.utils.toWei('1', 'ether') });
+
+            await expectRevert(
+                this.attacker.proxyEthWithdraw(),
+                'ReentrancyGuard: reentrant call',
+            );
+        });
+
+        describe('when fund transfer fails', () => {
+            beforeEach(async () => {
+                this.amount = 2 * DEPOSIT_VALUE;
+                this.preBalance = new BN(await web3.eth.getBalance(this.ethVault.address));
+                const { receipt } = await this.exitGame.proxyEthWithdraw(alice, this.amount);
+                this.withdrawReceipt = receipt;
+            });
+
+            it('should emit WithdrawFailed event', async () => {
+                await expectEvent.inTransaction(
+                    this.withdrawReceipt.transactionHash,
+                    EthVault,
+                    'WithdrawFailed',
+                    {
+                        receiver: alice,
+                        amount: new BN(this.amount),
+                    },
+                );
+            });
+
+            it('should not transfer ETH', async () => {
+                const postBalance = new BN(await web3.eth.getBalance(this.ethVault.address));
+                expect(postBalance).to.be.bignumber.equal(this.preBalance);
+            });
         });
 
         describe('given quarantined exit game', () => {

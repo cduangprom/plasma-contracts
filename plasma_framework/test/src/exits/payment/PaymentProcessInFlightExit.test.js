@@ -15,9 +15,10 @@ const SpyEthVault = artifacts.require('SpyEthVaultForExitGame');
 const SpyErc20Vault = artifacts.require('SpyErc20VaultForExitGame');
 const StateTransitionVerifierMock = artifacts.require('StateTransitionVerifierMock');
 const TxFinalizationVerifier = artifacts.require('TxFinalizationVerifier');
+const ReentrancyAttacker = artifacts.require('PaymentProcessInFlightExitAttacker');
 
 const {
-    BN, constants, expectEvent, time,
+    BN, constants, expectEvent, expectRevert, time,
 } = require('openzeppelin-test-helpers');
 const { expect } = require('chai');
 
@@ -74,7 +75,7 @@ contract('PaymentInFlightExitRouter', ([_, ifeBondOwner, inputOwner1, inputOwner
      * First two inputs and outputs would be of ETH.
      * The third input and output would be of ERC20.
      */
-    const buildInFlightExitData = async () => {
+    const buildInFlightExitData = async (bondOwner = ifeBondOwner) => {
         const emptyWithdrawData = {
             outputId: web3.utils.sha3('dummy output id'),
             exitTarget: constants.ZERO_ADDRESS,
@@ -87,7 +88,7 @@ contract('PaymentInFlightExitRouter', ([_, ifeBondOwner, inputOwner1, inputOwner
             exitStartTimestamp: (await time.latest()).toNumber(),
             exitMap: 0,
             position: INFLIGHT_EXIT_YOUNGEST_INPUT_POSITION,
-            bondOwner: ifeBondOwner,
+            bondOwner,
             bondSize: this.startIFEBondSize.toString(),
             oldestCompetitorPosition: 0,
             inputs: [{
@@ -329,7 +330,7 @@ contract('PaymentInFlightExitRouter', ([_, ifeBondOwner, inputOwner1, inputOwner
                 this.exit = await buildInFlightExitData();
                 this.exit.isCanonical = false;
 
-                // piggybackes all three inputs
+                // piggybacks all three inputs
                 this.exit.exitMap = (2 ** 0) | (2 ** 1) | (2 ** 2);
 
                 await this.exitGame.setInFlightExit(this.dummyExitId, this.exit);
@@ -394,13 +395,27 @@ contract('PaymentInFlightExitRouter', ([_, ifeBondOwner, inputOwner1, inputOwner
             });
         });
 
+        it('should fail when bond owner tries reentrancy attack', async () => {
+            const dummyExitId = 666;
+            const attacker = ReentrancyAttacker.new(this.exitGame.address, dummyExitId, ETH);
+            await web3.eth.sendTransaction({ to: attacker.address, from: outputOwner1, value: web3.utils.toWei('1', 'ether') });
+            const exit = await buildInFlightExitData(attacker.address);
+            exit.isCanonical = true;
+
+            // piggybacks all three outputs
+            exit.exitMap = (2 ** MAX_INPUT_NUM) | (2 ** (MAX_INPUT_NUM + 1)) | (2 ** (MAX_INPUT_NUM + 2));
+
+            await this.exitGame.setInFlightExit(dummyExitId, exit);
+            await expectRevert(this.exitGame.processExit(dummyExitId, VAULT_ID.ETH, ETH), 'error');
+        });
+
         describe('When the exit is canonical, and outputs are piggybacked', () => {
             beforeEach(async () => {
                 this.dummyExitId = 666;
                 this.exit = await buildInFlightExitData();
                 this.exit.isCanonical = true;
 
-                // piggybackes all three outputs
+                // piggybacks all three outputs
                 this.exit.exitMap = (2 ** MAX_INPUT_NUM) | (2 ** (MAX_INPUT_NUM + 1)) | (2 ** (MAX_INPUT_NUM + 2));
 
                 await this.exitGame.setInFlightExit(this.dummyExitId, this.exit);

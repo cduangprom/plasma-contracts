@@ -9,9 +9,11 @@ const SpyPlasmaFramework = artifacts.require('SpyPlasmaFrameworkForExitGame');
 const SpyEthVault = artifacts.require('SpyEthVaultForExitGame');
 const SpyErc20Vault = artifacts.require('SpyErc20VaultForExitGame');
 const TxFinalizationVerifier = artifacts.require('TxFinalizationVerifier');
+const ReentrancyAttacker = artifacts.require('PaymentProcessStandardExitAttacker');
+const FailedTransferAttacker = artifacts.require('FailedTransferAttacker');
 
 const {
-    BN, constants, expectEvent,
+    BN, constants, expectEvent, expectRevert,
 } = require('openzeppelin-test-helpers');
 const { expect } = require('chai');
 
@@ -66,14 +68,41 @@ contract('PaymentStandardExitRouter', ([_, alice]) => {
             await this.exitGame.depositFundForTest({ value: this.startStandardExitBondSize });
         });
 
-        const getTestExitData = (exitable, token) => ({
+        const getTestExitData = (exitable, token, exitTarget = alice) => ({
             exitable,
             utxoPos: buildUtxoPos(1, 0, 0),
             outputId: web3.utils.sha3('output id'),
             token,
-            exitTarget: alice,
+            exitTarget,
             amount: web3.utils.toWei('3', 'ether'),
             bondSize: this.startStandardExitBondSize.toString(),
+        });
+
+        it('should fail when reentrancy attack happens', async () => {
+            const exitId = 1;
+            const attacker = await ReentrancyAttacker.new(this.exitGame.address, exitId, ETH);
+
+            const testExitData = getTestExitData(true, ETH, attacker.address);
+            await this.exitGame.setExit(exitId, testExitData);
+            await web3.eth.sendTransaction({ to: attacker.address, from: alice, value: web3.utils.toWei('1', 'ether') });
+
+            await expectRevert(
+                this.exitGame.processExit(exitId, VAULT_ID.ETH, ETH),
+                'ReentrancyGuard: reentrant call',
+            );
+        });
+
+        it('should fail when returning bond fails', async () => {
+            const attacker = await FailedTransferAttacker.new();
+
+            const exitId = 1;
+            const testExitData = getTestExitData(true, ETH, attacker.address);
+            await this.exitGame.setExit(exitId, testExitData);
+
+            await expectRevert(
+                this.exitGame.processExit(exitId, VAULT_ID.ETH, ETH),
+                'Returning bond failed',
+            );
         });
 
         it('should not process the exit when such exit is not exitable', async () => {

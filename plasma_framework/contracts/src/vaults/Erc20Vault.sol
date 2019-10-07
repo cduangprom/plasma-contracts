@@ -6,8 +6,9 @@ import "../framework/PlasmaFramework.sol";
 
 import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-solidity/contracts/token/ERC20/SafeERC20.sol";
+import "openzeppelin-solidity/contracts/utils/ReentrancyGuard.sol";
 
-contract Erc20Vault is Vault {
+contract Erc20Vault is Vault, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     event Erc20Withdrawn(
@@ -49,7 +50,7 @@ contract Erc20Vault is Vault {
     * @param token address of ERC20 token contract.
     * @param amount amount to transfer.
     */
-    function withdraw(address payable receiver, address token, uint256 amount) external onlyFromNonQuarantinedExitGame {
+    function withdraw(address payable receiver, address token, uint256 amount) external onlyFromNonQuarantinedExitGame nonReentrant {
         IERC20(token).safeTransfer(receiver, amount);
         emit Erc20Withdrawn(receiver, token, amount);
     }
